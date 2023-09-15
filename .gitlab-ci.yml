@@ -123,6 +123,7 @@ plan_destroy:
     - terraform plan -destroy -out=$DESTROY
   dependencies:
     - apply
+  when: manual
   artifacts:
     name: destroy
     paths:
