@@ -34,3 +34,9 @@ AWS_SECRET_ACCESS_KEY
         Creates an execution plan, which lets you preview the changes that Terraform plans to make to your infrastructure, in this pipeline what it plans to destroy in AWS
 8. destroy:
         Executes the actions proposed in a Terraform plan, destroying the planned infrastructure in AWS
+
+# Manual Stages
+The following stages are manual stages in the pipeline as a review of the apply and destroy plans are required before creation or destruction of resources, plans are stored off as temporary artefacts specifically for review, expiration of these artefacts can be configured as needed:  
+1. Apply
+2. destroy
+

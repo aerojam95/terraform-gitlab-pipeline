@@ -128,7 +128,6 @@ plan_destroy:
     paths:
       - $DESTROY
     expire_in: 7 days
-  when: manual
 
 # 08 Job: Destroy | Stage: destroy
 # Purpose: Stop and destroy the resources configured by Terraform
