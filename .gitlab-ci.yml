@@ -1,0 +1,143 @@
+# Workflow image
+image:
+  name: registry.gitlab.com/gitlab-org/gitlab-build-images:terraform
+  entrypoint:
+    - '/usr/bin/env'
+    - 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+
+# Workflow variables
+variables:
+  # Provides filenames for the Terraform plan files so that they can be 
+  # referred to as aretfacts
+  PLAN: plan.tfplan
+  DESTROY: destroy.tfplan
+
+# Cache files between jobs
+cache:
+  # Globally caches the .terraform folder across each job in this workflow
+  paths:
+    - .terraform
+
+# before_script   
+.terraform_before_script: &terraform_before_script
+  before_script:
+    - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+    - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+    - rm -rf .terraform
+    - terraform --version
+    - terraform init --reconfigure
+
+# Provides a list of stages for this GitLab workflow
+stages:
+  - format
+  - validate
+  - plan_apply
+  - apply
+  - plan_destroy
+  - destroy
+
+# 01 Job: TF format | Stage: Validate
+# Purpose: Format the Terraforom configuration files (fmt) as a sort of linting test
+format:
+  <<: *terraform_before_script
+  stage: format
+  script:
+    # Job will fail with exit code 3 if formatting changes are required
+    - terraform fmt -list=true -write=false -diff=true -check=true -recursive
+
+# 02 Job: tflint | Stage: Validate
+# Purpose: Lint the Terraform configuration using tflint (only works with Terraform 0.12 code)
+tflint:
+  image:
+    name: wata727/tflint:latest
+    entrypoint:
+      - "/usr/bin/env"
+      - "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  stage: format
+  before_script:
+    - echo "tflint stage"
+  script:
+    - tflint -v
+    - tflint
+
+# 03 Job: TF validate | Stage: validate
+# Purpose: Validate the Terraform configuration files
+validate:
+  <<: *terraform_before_script
+  stage: validate
+  script:
+    - terraform validate
+  dependencies:
+    - format
+
+# 04 Job: Checkov | Stage: Validate
+# Purpose: Validate the Terraform configuration by applying security policies provided by Checkov
+checkov:
+  image:
+    name: bridgecrew/checkov:latest
+    entrypoint:
+      - "/usr/bin/env"
+      - "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  before_script:
+    - echo "checkov stage"
+  stage: validate
+  script:
+    - checkov -d . --download-external-modules true
+  dependencies:
+    - format
+  allow_failure: true
+
+# 05 Job: Plan_apply | Stage: Plan_apply
+# Purpose: Capture the new Terraform configuration settings as a plan file
+plan_apply:
+  <<: *terraform_before_script
+  stage: plan_apply
+  script:
+    - terraform plan -out=$PLAN
+  dependencies:
+    - validate
+  artifacts:
+    name: plan
+    paths:
+      - $PLAN
+    expire_in: 7 days
+
+# 06 Job: Apply | Stage: apply
+# Purpose: Apply the new Terraform configuration settings found in the plan file
+apply:
+  <<: *terraform_before_script
+  stage: apply
+  script:
+    - terraform apply -input=false --auto-approve $PLAN
+  dependencies:
+    - plan_apply
+  when: manual
+  retry: 2
+
+# 07 Job: Plan-destroy | Stage: Plan-destroy
+# Purpose: Capture the new Terraform configuration settings as a plan file
+plan_destroy:
+  <<: *terraform_before_script
+  stage: plan_destroy
+  script:
+    - terraform plan -destroy -out=$DESTROY
+  dependencies:
+    - apply
+  artifacts:
+    name: destroy
+    paths:
+      - $DESTROY
+    expire_in: 7 days
+  when: manual
+
+# 08 Job: Destroy | Stage: destroy
+# Purpose: Stop and destroy the resources configured by Terraform
+destroy:
+  <<: *terraform_before_script
+  stage: destroy
+  script:
+    - terraform apply -input=false --auto-approve $DESTROY
+  dependencies:
+    - plan_destroy 
+  when: manual
+  retry: 2
