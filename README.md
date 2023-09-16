@@ -36,7 +36,8 @@ AWS_SECRET_ACCESS_KEY
         Executes the actions proposed in a Terraform plan, destroying the planned infrastructure in AWS
 
 # Manual Stages
-The following stages are manual stages in the pipeline as a review of the apply and destroy plans are required before creation or destruction of resources, plans are stored off as temporary artefacts specifically for review, expiration of these artefacts can be configured as needed:  
-1. Apply
-2. destroy
+The following stages are manual stages in the pipeline as a review of the apply and destroy plans are required before creation or destruction of resources; plans are stored off as temporary artefacts specifically for review, expiration of these artefacts can be configured as needed;  destroy_plan is manual in order to plan to destroy what is applied:  
+1. apply
+2. destroy_plan
+3. destroy
 
